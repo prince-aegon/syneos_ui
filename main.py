@@ -9,7 +9,6 @@ from pinecone import Pinecone
 
 llm_models = {"GPT-3.5": "gpt-3.5-turbo-0125", "GPT-4": "gpt-4-turbo"}
 
-API_KEY = "47703291-8727-4f0c-a780-571542ece3a3"
 INDEX_NAME = "mtp"
 
 # Initialize Pinecone client
@@ -22,10 +21,10 @@ index = pc.Index(
 def RAG(prompt_text):
     model = SentenceTransformer("all-mpnet-base-v2")
 
-    embeddings = model.encode([prompt_text])
+    embeddings = model.encode(prompt_text)
     context = gradio_interface(embeddings)
 
-    query = perform_rag(prompt_chat,context)
+    query = perform_rag(prompt_text,context)
 
 
 def perform_rag(context, top_context):
@@ -33,7 +32,7 @@ def perform_rag(context, top_context):
   model = SentenceTransformer("all-mpnet-base-v2")
 
   tokenizer = AutoTokenizer.from_pretrained(model)
-  model = AutoModelForSeq2SeqLM.from_pretrained(model)
+#   model = AutoModelForSeq2SeqLM.from_pretrained(model)
 
   # Prepare RAG inputs (replace with your processing steps)
   input_ids = tokenizer(context, top_context, return_tensors="pt")["input_ids"]
@@ -50,30 +49,30 @@ def gradio_interface(context):
     print()
     top_k = 2
     # Perform retrieval using Pinecone based on the context
-    vec = context[0]
+    vec = context.tolist()
+
+    print(type(vec))
     print(vec)
+
     print("Embeddings are ")
     embeddings = index.query(
     vector=vec,
     top_k=top_k,
     include_values=True)
-    print(embeddings)
 
-    embeddings = index.query(embeddings=[context], top_k=top_k)  # Assuming context has embeddings
-    responses = embeddings  # Assuming response structure has changed
-
-    print("embeddings are: ")
     print(embeddings)
+    all_values = [match['values'] for match in embeddings['matches']]
 
   # List to store top contexts and their generated text
     top_contexts_and_responses = []
 
     # Loop through top k results and perform RAG for each
-    for response in responses:
-        print(response)
-        top_context = response["document"]
+    for top_context in all_values:
+        print(top_context)
+        # top_context = response["document"]
         # Replace with your RAG implementation
-        # generated_text = perform_rag(context, response["embedding"])  # Assuming embedding field name
+        generated_text = perform_rag(vec, top_context)  # Assuming embedding field name
+        print("generated text is",  generated_text)
         # top_contexts_and_responses.append((top_context, generated_text))
 
     # Return list of top contexts and generated responses
@@ -81,7 +80,7 @@ def gradio_interface(context):
 
 
 def process_text(input1, input2, input3, key, model_in, temp_in):
-    openai.api_key = key
+    # openai.api_key = "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"
     curr_string = "You are an oncologist. If for a clinical trial, the Inclusion Criteria is :\n" + \
         input2 + "\n" + \
         "and the Exclusion Criteria is : " + input3 + "\n" + \
@@ -90,7 +89,7 @@ def process_text(input1, input2, input3, key, model_in, temp_in):
         ".\n Then given this information determine if the patient is eligible for the trial. Give a binary answer Eligible/Not Eligible as the response. In the response please do not add any extra text, just the response Eligible or Not Eligible"
 
     # TO perform RAG
-    # query = RAG(curr_string)
+    query = RAG(curr_string)
     prompt_parts = curr_string
     print(prompt_parts)
 
