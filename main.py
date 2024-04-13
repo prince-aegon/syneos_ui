@@ -23,60 +23,80 @@ def RAG(prompt_text):
 
     embeddings = model.encode(prompt_text)
     context = gradio_interface(embeddings)
+    return context
+    # query = perform_rag(prompt_text,context)
 
-    query = perform_rag(prompt_text,context)
 
+# def perform_rag(context, top_context):
+#   # Load your chosen RAG model and tokenizer (replace placeholders)
+#   model = SentenceTransformer("all-mpnet-base-v2")
 
-def perform_rag(context, top_context):
-  # Load your chosen RAG model and tokenizer (replace placeholders)
-  model = SentenceTransformer("all-mpnet-base-v2")
+#   tokenizer = AutoTokenizer.from_pretrained(model)
+# #   model = AutoModelForSeq2SeqLM.from_pretrained(model)
 
-  tokenizer = AutoTokenizer.from_pretrained(model)
-#   model = AutoModelForSeq2SeqLM.from_pretrained(model)
+#   # Prepare RAG inputs (replace with your processing steps)
+#   input_ids = tokenizer(context, top_context, return_tensors="pt")["input_ids"]
 
-  # Prepare RAG inputs (replace with your processing steps)
-  input_ids = tokenizer(context, top_context, return_tensors="pt")["input_ids"]
+#   # Generate text using your RAG model (replace with your logic)
+#   output = model.generate(**input_ids)
+#   generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
 
-  # Generate text using your RAG model (replace with your logic)
-  output = model.generate(**input_ids)
-  generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+#   return generated_text
 
-  return generated_text
+import pandas as pd
+
+df = pd.read_csv("Data.csv", encoding='cp1252')
 
 
 def gradio_interface(context):
-    print("Context Is :")
-    print()
-    top_k = 2
+    # print("Context Is :")
+    # print()
+    top_k = 1
     # Perform retrieval using Pinecone based on the context
     vec = context.tolist()
 
-    print(type(vec))
-    print(vec)
+    # print(type(vec))
+    # print(vec)
 
-    print("Embeddings are ")
+    # print("Embeddings are ")
     embeddings = index.query(
     vector=vec,
     top_k=top_k,
     include_values=True)
 
-    print(embeddings)
-    all_values = [match['values'] for match in embeddings['matches']]
+    # print(embeddings)
+    all_values = [match['id'] for match in embeddings['matches']]
 
-  # List to store top contexts and their generated text
-    top_contexts_and_responses = []
+  # Var to store generated text of top contexts
 
+    ret = "From Pinecone: You may consider as an example of a similar patients with the inclusion, exclusion, and eligibility below to make your decision about the eligibility:"
     # Loop through top k results and perform RAG for each
-    for top_context in all_values:
-        print(top_context)
-        # top_context = response["document"]
-        # Replace with your RAG implementation
-        generated_text = perform_rag(vec, top_context)  # Assuming embedding field name
-        print("generated text is",  generated_text)
-        # top_contexts_and_responses.append((top_context, generated_text))
+    for j in  range(top_k):
+        print("Id is ", all_values[j] )
 
-    # Return list of top contexts and generated responses
-    return top_contexts_and_responses
+        i = int(all_values[j])
+        r = ""
+        r = "\n Inclusion: "
+        r += "\n"
+        r += df['ï»¿inclusion_criteria'][i]
+
+        r += "\n Exclusion: "
+        r += "\n"
+        r+= df['exclusion_criteria'][i]            
+
+        r += "\n Patient Profile: "
+        r += "\n"
+        r += df['patient_profiles'][i]
+
+        r += "\n Eligibility: "
+        r += "\n"
+        r += df['target'][i]
+        
+        if j!= top_k-1:
+            r+=" \n Here is another patient profile from Pinecone."
+
+        ret += r
+    return ret
 
 
 def process_text(input1, input2, input3, key, model_in, temp_in):
@@ -89,14 +109,32 @@ def process_text(input1, input2, input3, key, model_in, temp_in):
         ".\n Then given this information determine if the patient is eligible for the trial. Give a binary answer Eligible/Not Eligible as the response. In the response please do not add any extra text, just the response Eligible or Not Eligible"
 
     # TO perform RAG
+
+    prompt = "You are an oncologist. You job is to check the below mentioned patient profile against an inclusion and exclusion criteria and tell whether the patient is eligible for the study or not."
     query = RAG(curr_string)
-    prompt_parts = curr_string
-    print(prompt_parts)
+    prompt += query
+
+    prompt += "\n Inclusion:"
+    prompt +="\n"
+    prompt += input2
+
+    prompt += "\n Exclusion:"
+    prompt +="\n"
+    prompt += input3
+
+    prompt += "\n Patient Profile:"
+    prompt +="\n"
+    prompt += input1
+    
+
+    prompt +="Please don't add any extra text. Just reply Eligible/ Not Eligible "
+    # prompt_parts = curr_string
+    # print(prompt_parts)
 
     response = openai.ChatCompletion.create(
         model=llm_models[model_in],
         messages=[{"role": "system", "content": "You are a helpful assistant and acting as an oncologist"}, {
-            "role": "user", "content": prompt_parts}],
+            "role": "user", "content": query}],
         temperature=temp_in
     )
     print(response)
